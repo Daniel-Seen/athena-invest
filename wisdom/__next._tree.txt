@@ -1,0 +1,3 @@
+:HL["/athena-invest/_next/static/chunks/3iufe1oos_h7n.css","style"]
+:HL["/athena-invest/_next/static/media/797e433ab948586e-s.p.0w5z4e7s8jfe5.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"wisdom","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"t0dwwVsjxIDCt9Pai-Q33"}

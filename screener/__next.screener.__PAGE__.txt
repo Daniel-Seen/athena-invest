@@ -1,0 +1,9 @@
+1:"$Sreact.fragment"
+2:I[47257,["/athena-invest/_next/static/chunks/09d_2ylmsiqls.js","/athena-invest/_next/static/chunks/1-8s9_t85wwr4.js","/athena-invest/_next/static/chunks/17hmgvswj8jym.js"],"ClientPageRoot"]
+3:I[39538,["/athena-invest/_next/static/chunks/09d_2ylmsiqls.js","/athena-invest/_next/static/chunks/1-8s9_t85wwr4.js","/athena-invest/_next/static/chunks/17hmgvswj8jym.js","/athena-invest/_next/static/chunks/2tl2ljngv6jhj.js","/athena-invest/_next/static/chunks/108y9e6jkd6yv.js"],"default",1]
+6:I[97367,["/athena-invest/_next/static/chunks/09d_2ylmsiqls.js","/athena-invest/_next/static/chunks/1-8s9_t85wwr4.js","/athena-invest/_next/static/chunks/17hmgvswj8jym.js"],"OutletBoundary"]
+7:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/athena-invest/_next/static/chunks/2tl2ljngv6jhj.js","async":true}],["$","script","script-1",{"src":"/athena-invest/_next/static/chunks/108y9e6jkd6yv.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"t0dwwVsjxIDCt9Pai-Q33"}
+4:{}
+5:"$0:rsc:props:children:0:props:serverProvidedParams:params"
+8:null
