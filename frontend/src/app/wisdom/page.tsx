@@ -105,23 +105,32 @@ const INVESTORS = ["全部", "沃伦·巴菲特", "查理·芒格", "彼得·林
 
 export default function WisdomPage() {
   const [daily, setDaily] = useState<Principle | null>(null);
+  const [allPrinciples, setAllPrinciples] = useState<Principle[]>(PRINCIPLES);
   const [activeCategory, setActiveCategory] = useState("全部");
   const [activeInvestor, setActiveInvestor] = useState("全部");
 
   useEffect(() => {
-    async function fetchDaily() {
+    async function fetchAll() {
       try {
-        const res = await fetch("http://localhost:8000/api/wisdom/daily");
-        if (res.ok) setDaily(await res.json());
+        const [dailyRes, principlesRes] = await Promise.all([
+          fetch("http://localhost:8000/api/wisdom/daily"),
+          fetch("http://localhost:8000/api/wisdom/principles"),
+        ]);
+        if (dailyRes.ok) setDaily(await dailyRes.json());
+        if (principlesRes.ok) {
+          const data = await principlesRes.json();
+          setAllPrinciples(data);
+        }
       } catch {
-        // Use local data
+        // Fallback to local data
         setDaily(PRINCIPLES[new Date().getDate() % PRINCIPLES.length]);
+        setAllPrinciples(PRINCIPLES);
       }
     }
-    fetchDaily();
+    fetchAll();
   }, []);
 
-  const filtered = PRINCIPLES.filter(
+  const filtered = allPrinciples.filter(
     (p) =>
       (activeCategory === "全部" || p.category === activeCategory) &&
       (activeInvestor === "全部" || p.investor === activeInvestor)

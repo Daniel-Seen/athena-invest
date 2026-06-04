@@ -137,6 +137,119 @@ async def evaluate_us_stock(symbol: str) -> dict:
         return {"symbol": symbol, "error": str(e)}
 
 
+async def evaluate_cn_stock(symbol: str, name: str = "") -> dict:
+    """Evaluate an A股 stock on quality metrics using akshare financial data."""
+    try:
+        import akshare as ak
+        
+        # Get financial indicators
+        try:
+            df = ak.stock_financial_abstract_ths(symbol=symbol, indicator="按报告期")
+        except Exception:
+            df = None
+        
+        roe = None
+        gross_margin = None
+        debt_to_equity = None
+        revenue_growth = None
+        
+        if df is not None and not df.empty:
+            latest = df.iloc[0]
+            # Try to extract common financial fields
+            for col in df.columns:
+                col_lower = str(col).lower()
+                if '净资产收益率' in str(col) and roe is None:
+                    try:
+                        val = float(str(latest[col]).replace('%', ''))
+                        roe = val / 100 if val > 1 else val
+                    except: pass
+                if '毛利率' in str(col) and gross_margin is None:
+                    try:
+                        val = float(str(latest[col]).replace('%', ''))
+                        gross_margin = val / 100 if val > 1 else val
+                    except: pass
+                if '资产负债率' in str(col) and debt_to_equity is None:
+                    try:
+                        val = float(str(latest[col]).replace('%', ''))
+                        debt_to_equity = val
+                    except: pass
+                if '营业收入同比增长' in str(col) and revenue_growth is None:
+                    try:
+                        val = float(str(latest[col]).replace('%', ''))
+                        revenue_growth = val / 100 if val > 1 else val
+                    except: pass
+        
+        # Calculate scores with available data
+        roe_score = score_roe(roe) if roe is not None else 0.5
+        margin_score = score_gross_margin(gross_margin) if gross_margin is not None else 0.5
+        debt_score = score_debt(debt_to_equity) if debt_to_equity is not None else 0.5
+        
+        quality_score = (
+            roe_score * QUALITY_WEIGHTS["roe"] +
+            margin_score * QUALITY_WEIGHTS["gross_margin"] +
+            debt_score * QUALITY_WEIGHTS["debt_ratio"] +
+            0.5 * QUALITY_WEIGHTS["roic"] +
+            0.5 * QUALITY_WEIGHTS["fcf_yield"] +
+            (0.7 if revenue_growth and revenue_growth > 0.10 else 0.4) * QUALITY_WEIGHTS["revenue_growth"] +
+            0.5 * QUALITY_WEIGHTS["dividend"]
+        )
+        
+        display_name = name if name else symbol
+        
+        return {
+            "symbol": symbol,
+            "name": display_name,
+            "sector": "A股",
+            "quality_score": round(quality_score, 1),
+            "metrics": {
+                "roe": round(float(roe * 100), 1) if roe else None,
+                "gross_margin": round(float(gross_margin * 100), 1) if gross_margin else None,
+                "debt_to_equity": round(float(debt_to_equity), 1) if debt_to_equity else None,
+                "pe_ratio": None,
+                "dividend_yield": None,
+                "revenue_growth": round(float(revenue_growth * 100), 1) if revenue_growth else None,
+            },
+            "rating": _get_rating(quality_score),
+            "analysis": _get_analysis(roe_score, margin_score, debt_score),
+        }
+    except Exception as e:
+        return {"symbol": symbol, "error": str(e)}
+
+
+async def get_stock_history(symbol: str, market: str = "cn", period: str = "monthly") -> list:
+    """Get historical price data for charting."""
+    try:
+        if market == "cn":
+            import akshare as ak
+            df = ak.stock_zh_a_hist(symbol=symbol, period=period, adjust="qfq")
+            if df.empty:
+                return []
+            result = []
+            for _, row in df.tail(60).iterrows():
+                result.append({
+                    "date": str(row["日期"])[:10],
+                    "close": round(float(row["收盘"]), 2),
+                    "volume": int(row["成交量"]),
+                })
+            return result
+        else:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="3mo")
+            if hist.empty:
+                return []
+            result = []
+            for idx, row in hist.iterrows():
+                result.append({
+                    "date": str(idx)[:10],
+                    "close": round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"]),
+                })
+            return result
+    except Exception as e:
+        return []
+
+
 def _get_rating(score: float) -> str:
     if score >= 80:
         return "🏆 卓越"
