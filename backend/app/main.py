@@ -17,6 +17,7 @@ app.add_middleware(
         "http://localhost:3000",
         "https://daniel-seen.github.io",
     ],
+    allow_origin_regex="https://.*\.trycloudflare\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
