@@ -1,4 +1,5 @@
 """Portfolio simulator — virtual trading and tracking."""
+import asyncio
 from datetime import datetime, date
 from typing import Optional
 from app.data.database import get_db
@@ -233,8 +234,11 @@ async def _get_current_price(symbol: str, market: str) -> float:
     """Get current price for a symbol."""
     try:
         if market == "cn":
-            import akshare as ak
-            df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+            def _fetch():
+                import akshare as ak
+                df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+                return df
+            df = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=10.0)
             if not df.empty:
                 return round(float(df.iloc[-1]["收盘"]), 2)
         else:

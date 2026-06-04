@@ -1,4 +1,5 @@
 """Quality scoring engine — evaluates companies on fundamental metrics."""
+import asyncio
 from typing import Optional
 
 
@@ -142,11 +143,15 @@ async def evaluate_cn_stock(symbol: str, name: str = "") -> dict:
     try:
         import akshare as ak
         
-        # Get financial indicators
-        try:
-            df = ak.stock_financial_abstract_ths(symbol=symbol, indicator="按报告期")
-        except Exception:
-            df = None
+        # Get financial indicators (run sync akshare in thread to avoid blocking event loop)
+        def _fetch():
+            try:
+                import akshare as ak
+                return ak.stock_financial_abstract_ths(symbol=symbol, indicator="按报告期")
+            except Exception:
+                return None
+        
+        df = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=15.0)
         
         roe = None
         gross_margin = None
@@ -220,9 +225,12 @@ async def get_stock_history(symbol: str, market: str = "cn", period: str = "mont
     """Get historical price data for charting."""
     try:
         if market == "cn":
-            import akshare as ak
-            df = ak.stock_zh_a_hist(symbol=symbol, period=period, adjust="qfq")
-            if df.empty:
+            def _fetch():
+                import akshare as ak
+                df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+                return df
+            df = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=15.0)
+            if df is None or df.empty:
                 return []
             result = []
             for _, row in df.tail(60).iterrows():
