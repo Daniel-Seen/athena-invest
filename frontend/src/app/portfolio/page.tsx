@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,190 +9,258 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  PieChart,
   Plus,
   Minus,
-  History,
+  BarChart3,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 
 interface Position {
   symbol: string;
   name: string;
-  market: string;
   shares: number;
   buy_price: number;
-  invested: number;
+  current_price: number;
+  cost: number;
+  value: number;
+  pnl: number;
+  pnl_pct: number;
   buy_date: string;
-  notes: string;
 }
 
-interface PortfolioData {
-  initial_capital: number;
-  total_invested: number;
-  cash: number;
+interface Valuation {
+  total_cost: number;
+  total_value: number;
+  total_pnl: number;
+  total_pnl_pct: number;
   positions: Position[];
-  position_count: number;
 }
+
+const COLORS = ["#fbbf24", "#34d399", "#60a5fa", "#f472b6", "#a78bfa", "#fb923c"];
 
 export default function PortfolioPage() {
-  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const [valuation, setValuation] = useState<Valuation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showBuy, setShowBuy] = useState(false);
+  const [showSell, setShowSell] = useState<Position | null>(null);
+  const [tradeMsg, setTradeMsg] = useState("");
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch("http://localhost:8000/api/portfolio/summary");
-        if (res.ok) setPortfolio(await res.json());
-      } catch {
-        // Demo empty portfolio
-        setPortfolio({
-          initial_capital: 1000000,
-          total_invested: 0,
-          cash: 1000000,
-          positions: [],
-          position_count: 0,
-        });
-      }
-      setLoading(false);
+  const fetchValuation = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:8000/api/portfolio/valuation");
+      if (res.ok) setValuation(await res.json());
+    } catch (e) {
+      // backend not ready
     }
-    fetchData();
+    setLoading(false);
   }, []);
 
-  if (!portfolio) return null;
+  useEffect(() => {
+    fetchValuation();
+  }, [fetchValuation]);
 
-  const investedPercent = (portfolio.total_invested / portfolio.initial_capital) * 100;
+  const doTrade = async (type: "buy" | "sell", symbol: string, name: string, shares: number, price: number, notes: string) => {
+    setTradeMsg("");
+    try {
+      const res = await fetch(`http://localhost:8000/api/portfolio/${type}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, name, market: "us", shares, price, notes }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setTradeMsg(`❌ ${data.error}`);
+      } else {
+        setTradeMsg(`✅ ${type === "buy" ? "买入" : "卖出"}成功`);
+        setShowBuy(false);
+        setShowSell(null);
+        await fetchValuation();
+      }
+    } catch {
+      setTradeMsg("❌ 网络错误");
+    }
+  };
+
+  if (!valuation) {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="text-center py-20 text-muted-foreground">
+          <Wallet className="w-16 h-16 mx-auto mb-4 opacity-30" />
+          <p className="text-lg">正在连接后端服务...</p>
+          <p className="text-sm mt-2">请确保后端已启动: python3 -m uvicorn app.main:app --port 8000</p>
+        </div>
+      </div>
+    );
+  }
+
+  const initCapital = 1_000_000;
+  const cash = initCapital - valuation.total_cost;
+  const investedPct = valuation.total_cost > 0 ? (valuation.total_cost / initCapital * 100) : 0;
+
+  // Pie data: holdings breakdown
+  const pieData = valuation.positions.map((p, i) => ({
+    name: p.symbol,
+    value: p.value,
+    fill: COLORS[i % COLORS.length],
+  }));
+
+  // Bar data: P&L per position
+  const barData = valuation.positions.map((p) => ({
+    name: p.symbol,
+    盈亏: p.pnl,
+    成本: p.cost,
+    市值: p.value,
+  }));
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">模拟投资组合</h2>
-        <p className="text-muted-foreground mt-1">
-          虚拟资金 ¥1,000,000 — 在实战前用模拟账户练习投资决策
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">模拟投资组合</h2>
+          <p className="text-muted-foreground mt-1">虚拟资金 ¥{initCapital.toLocaleString()}</p>
+        </div>
+        <Button onClick={() => setShowBuy(true)} className="gap-2">
+          <Plus className="w-4 h-4" /> 买入
+        </Button>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              总资金
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono">
-              ¥{portfolio.initial_capital.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              已投资
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono text-blue-400">
-              ¥{portfolio.total_invested.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              占比 {investedPercent.toFixed(1)}%
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              可用现金
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono text-green-400">
-              ¥{portfolio.cash.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              持仓数量
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {portfolio.position_count}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">只标的</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <StatCard
+          label="总市值"
+          value={`¥${valuation.total_value.toLocaleString()}`}
+          icon={<Wallet className="w-4 h-4" />}
+        />
+        <StatCard
+          label="总成本"
+          value={`¥${valuation.total_cost.toLocaleString()}`}
+          icon={<DollarSign className="w-4 h-4" />}
+        />
+        <StatCard
+          label="可用现金"
+          value={`¥${cash.toLocaleString()}`}
+          icon={<DollarSign className="w-4 h-4" />}
+        />
+        <StatCard
+          label="总盈亏"
+          value={`${valuation.total_pnl >= 0 ? "+" : ""}¥${valuation.total_pnl.toLocaleString()}`}
+          icon={valuation.total_pnl >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          className={valuation.total_pnl >= 0 ? "text-green-400" : "text-red-400"}
+        />
+        <StatCard
+          label="收益率"
+          value={`${valuation.total_pnl_pct >= 0 ? "+" : ""}${valuation.total_pnl_pct}%`}
+          icon={<BarChart3 className="w-4 h-4" />}
+          className={valuation.total_pnl_pct >= 0 ? "text-green-400" : "text-red-400"}
+        />
       </div>
+
+      {/* Charts Row */}
+      {valuation.positions.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Holdings Pie */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">持仓分布</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => `¥${Number(v).toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* P&L Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">各持仓盈亏</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <XAxis dataKey="name" stroke="#888" fontSize={12} />
+                  <YAxis stroke="#888" fontSize={12} />
+                  <Tooltip formatter={(v: any) => `¥${Number(v).toLocaleString()}`} />
+                  <Bar dataKey="成本" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="市值" fill="#34d399" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Positions */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>当前持仓</CardTitle>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="gap-1">
-                <Plus className="w-4 h-4" />
-                买入
-              </Button>
-              <Button size="sm" variant="outline" className="gap-1">
-                <History className="w-4 h-4" />
-                交易记录
-              </Button>
-            </div>
-          </div>
+          <CardTitle>当前持仓 ({valuation.positions.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {portfolio.positions.length === 0 ? (
+          {valuation.positions.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-30" />
               <p className="text-lg mb-2">还没有任何持仓</p>
               <p className="text-sm">
-                前往"资产筛选"页面，找到优质资产后点击"买入"
-                开始你的模拟投资之旅
+                点击右上角"买入"按钮，开始你的模拟投资之旅
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {portfolio.positions.map((pos) => (
+            <div className="space-y-2">
+              {valuation.positions.map((pos) => (
                 <div
                   key={pos.symbol}
-                  className="flex items-center justify-between p-4 rounded-lg bg-secondary/30"
+                  className="flex items-center justify-between p-4 rounded-lg bg-secondary/20 hover:bg-secondary/30 transition-colors"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
                       <span className="font-bold">{pos.name}</span>
-                      <span className="text-sm text-muted-foreground font-mono">
-                        {pos.symbol}
-                      </span>
-                      <Badge variant="outline" className="text-xs">
-                        {pos.market}
-                      </Badge>
+                      <span className="text-xs text-muted-foreground font-mono">{pos.symbol}</span>
+                      <Badge variant="outline" className="text-xs">US</Badge>
                     </div>
-                    <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                      <span>{pos.shares} 股</span>
-                      <span>成本 ¥{pos.buy_price}</span>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{pos.shares} 股 × ¥{pos.buy_price}</span>
+                      <span>→ 现价 ¥{pos.current_price}</span>
                       <span>买入 {pos.buy_date}</span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold font-mono">
-                      ¥{pos.invested.toLocaleString()}
+                  <div className="text-right mr-4">
+                    <div className="font-mono font-bold">¥{pos.value.toLocaleString()}</div>
+                    <div className={`text-sm font-mono ${pos.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {pos.pnl >= 0 ? "+" : ""}¥{pos.pnl.toLocaleString()}
+                      <span className="ml-1">({pos.pnl_pct >= 0 ? "+" : ""}{pos.pnl_pct}%)</span>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-red-400 hover:text-red-300 gap-1 mt-1"
-                    >
-                      <Minus className="w-3 h-3" />
-                      卖出
-                    </Button>
                   </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-400 hover:text-red-300"
+                    onClick={() => setShowSell(pos)}
+                  >
+                    <Minus className="w-4 h-4 mr-1" /> 卖出
+                  </Button>
                 </div>
               ))}
             </div>
@@ -200,37 +268,168 @@ export default function PortfolioPage() {
         </CardContent>
       </Card>
 
-      {/* Getting Started Tips */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">💡 新手投资指南</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="p-4 rounded-lg bg-secondary/30">
-              <h4 className="font-medium mb-2">📚 第一步：学习</h4>
-              <p className="text-muted-foreground">
-                先去"投资智慧"页面，读完前5条原则。
-                理解什么是价值投资。
-              </p>
+      {/* Trade Message */}
+      {tradeMsg && (
+        <div className={`text-center text-sm p-2 rounded ${tradeMsg.startsWith("✅") ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"}`}>
+          {tradeMsg}
+        </div>
+      )}
+
+      {/* Buy Modal */}
+      {showBuy && (
+        <TradeModal
+          title="买入股票"
+          onClose={() => { setShowBuy(false); setTradeMsg(""); }}
+          onSubmit={(symbol, name, shares, price) => doTrade("buy", symbol, name, shares, price, "")}
+          tradeMsg={tradeMsg}
+        />
+      )}
+
+      {/* Sell Modal */}
+      {showSell && (
+        <TradeModal
+          title={`卖出 ${showSell.name}`}
+          onClose={() => { setShowSell(null); setTradeMsg(""); }}
+          onSubmit={(symbol, name, shares, price) => doTrade("sell", symbol, name, shares, price, "")}
+          tradeMsg={tradeMsg}
+          initialSymbol={showSell.symbol}
+          initialName={showSell.name}
+          maxShares={showSell.shares}
+          initialPrice={showSell.current_price}
+        />
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className="bg-card/50">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-muted-foreground">{icon}</span>
+          <span className="text-xs text-muted-foreground">{label}</span>
+        </div>
+        <div className={`text-lg font-bold font-mono ${className}`}>{value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TradeModal({
+  title,
+  onClose,
+  onSubmit,
+  tradeMsg,
+  initialSymbol = "",
+  initialName = "",
+  maxShares,
+  initialPrice = 0,
+}: {
+  title: string;
+  onClose: () => void;
+  onSubmit: (s: string, n: string, sh: number, p: number) => void;
+  tradeMsg: string;
+  initialSymbol?: string;
+  initialName?: string;
+  maxShares?: number;
+  initialPrice?: number;
+}) {
+  const [symbol, setSymbol] = useState(initialSymbol);
+  const [name, setName] = useState(initialName);
+  const [shares, setShares] = useState(1);
+  const [price, setPrice] = useState(initialPrice);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-xl p-6 w-full max-w-md space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold">{title}</h3>
+
+        {!initialSymbol && (
+          <>
+            <div>
+              <label className="text-xs text-muted-foreground">股票代码</label>
+              <input
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm font-mono"
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                placeholder="AAPL"
+              />
             </div>
-            <div className="p-4 rounded-lg bg-secondary/30">
-              <h4 className="font-medium mb-2">🔍 第二步：筛选</h4>
-              <p className="text-muted-foreground">
-                在"资产筛选"页面，找出质量评分
-                {'>'}70的优质公司，研究它们做什么生意。
-              </p>
+            <div>
+              <label className="text-xs text-muted-foreground">股票名称</label>
+              <input
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Apple Inc."
+              />
             </div>
-            <div className="p-4 rounded-lg bg-secondary/30">
-              <h4 className="font-medium mb-2">💼 第三步：模拟</h4>
-              <p className="text-muted-foreground">
-                用虚拟资金买入你看好的公司，记录决策原因。
-                3个月后回顾你的判断是否正确。
-              </p>
-            </div>
+          </>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground">
+              数量 {maxShares ? `(最多 ${maxShares})` : ""}
+            </label>
+            <input
+              type="number"
+              className="w-full mt-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm font-mono"
+              value={shares}
+              onChange={(e) => setShares(Math.max(1, Math.min(Number(e.target.value), maxShares || 99999)))}
+              min={1}
+              max={maxShares || 99999}
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <label className="text-xs text-muted-foreground">价格 (¥)</label>
+            <input
+              type="number"
+              className="w-full mt-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm font-mono"
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
+              step="0.01"
+              min={0.01}
+            />
+          </div>
+        </div>
+
+        {shares > 0 && price > 0 && (
+          <div className="text-sm text-muted-foreground">
+            预计金额: <span className="font-mono font-bold text-foreground">¥{(shares * price).toLocaleString()}</span>
+          </div>
+        )}
+
+        {tradeMsg && (
+          <div className={`text-sm p-2 rounded ${tradeMsg.startsWith("✅") ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"}`}>
+            {tradeMsg}
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button
+            onClick={() => onSubmit(symbol, name || symbol, shares, price)}
+            disabled={!symbol || shares <= 0 || price <= 0}
+          >
+            确认{title.includes("买入") ? "买入" : "卖出"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

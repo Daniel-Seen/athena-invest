@@ -167,3 +167,87 @@ async def add_to_watchlist(symbol: str, name: str, market: str, notes: str = "")
         return {"status": "ok", "symbol": symbol}
     finally:
         await db.close()
+
+
+async def get_valuation() -> dict:
+    """Get portfolio valuation with current prices."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT symbol, name, market, shares, buy_price, buy_date FROM portfolio"
+        )
+        holdings = await cursor.fetchall()
+        
+        if not holdings:
+            return {
+                "total_cost": 0,
+                "total_value": 0,
+                "total_pnl": 0,
+                "total_pnl_pct": 0,
+                "positions": [],
+            }
+        
+        positions = []
+        total_cost = 0
+        total_value = 0
+        
+        for h in holdings:
+            cost = h["shares"] * h["buy_price"]
+            total_cost += cost
+            
+            # Get current price
+            current_price = await _get_current_price(h["symbol"], h["market"])
+            value = h["shares"] * current_price
+            total_value += value
+            pnl = value - cost
+            pnl_pct = (pnl / cost * 100) if cost > 0 else 0
+            
+            positions.append({
+                "symbol": h["symbol"],
+                "name": h["name"],
+                "shares": h["shares"],
+                "buy_price": h["buy_price"],
+                "current_price": current_price,
+                "cost": round(cost, 2),
+                "value": round(value, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round(pnl_pct, 2),
+                "buy_date": h["buy_date"],
+            })
+        
+        total_pnl = total_value - total_cost
+        total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+        
+        return {
+            "total_cost": round(total_cost, 2),
+            "total_value": round(total_value, 2),
+            "total_pnl": round(total_pnl, 2),
+            "total_pnl_pct": round(total_pnl_pct, 2),
+            "positions": positions,
+        }
+    finally:
+        await db.close()
+
+
+async def _get_current_price(symbol: str, market: str) -> float:
+    """Get current price for a symbol."""
+    try:
+        if market == "cn":
+            import akshare as ak
+            df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+            if not df.empty:
+                return round(float(df.iloc[-1]["收盘"]), 2)
+        else:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if price:
+                return round(float(price), 2)
+            # Fallback to last close
+            hist = ticker.history(period="1d")
+            if not hist.empty:
+                return round(float(hist.iloc[-1]["Close"]), 2)
+    except Exception:
+        pass
+    return 0.0

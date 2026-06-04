@@ -62,3 +62,9 @@ async def add_watchlist(item: WatchlistRequest):
     return await portfolio_service.add_to_watchlist(
         item.symbol, item.name, item.market, item.notes
     )
+
+
+@router.get("/valuation")
+async def get_valuation():
+    """获取持仓实时估值与盈亏"""
+    return await portfolio_service.get_valuation()
