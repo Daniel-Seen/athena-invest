@@ -10,6 +10,7 @@ import {
 import {
   LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
+import { apiGet } from "@/lib/api";
 
 interface IndexData {
   value: number;
@@ -32,20 +33,14 @@ export default function DashboardPage() {
     async function fetchAll() {
       try {
         const [idxRes, wisdomRes, histRes] = await Promise.all([
-          fetch("http://localhost:8000/api/market/indices?market=cn"),
-          fetch("http://localhost:8000/api/wisdom/daily"),
-          fetch("http://localhost:8000/api/screener/history/000300?market=cn&period=daily"),
+          apiGet("/api/market/indices?market=cn") as Promise<Record<string, IndexData>>,
+          apiGet("/api/wisdom/daily"),
+          apiGet("/api/screener/history/000300?market=cn&period=daily") as Promise<HistoryPoint[]>,
         ]);
 
-        if (idxRes.ok) {
-          const data = await idxRes.json();
-          if (Object.keys(data).length > 0) setIndices(data);
-        }
-        if (wisdomRes.ok) setWisdom(await wisdomRes.json());
-        if (histRes.ok) {
-          const hist = await histRes.json();
-          if (Array.isArray(hist)) setHistory(hist.slice(-30));
-        }
+        if (idxRes && Object.keys(idxRes).length > 0) setIndices(idxRes);
+        if (wisdomRes) setWisdom(wisdomRes);
+        if (histRes && Array.isArray(histRes)) setHistory(histRes.slice(-30));
       } catch (e: any) {
         setError(e.message);
       }

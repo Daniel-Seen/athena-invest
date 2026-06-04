@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Lightbulb, BookOpen, GraduationCap, Quote } from "lucide-react";
+import { apiGet } from "@/lib/api";
 
 interface Principle {
   id: number;
@@ -113,14 +114,11 @@ export default function WisdomPage() {
     async function fetchAll() {
       try {
         const [dailyRes, principlesRes] = await Promise.all([
-          fetch("http://localhost:8000/api/wisdom/daily"),
-          fetch("http://localhost:8000/api/wisdom/principles"),
+          apiGet("/api/wisdom/daily") as Promise<Principle>,
+          apiGet("/api/wisdom/principles") as Promise<Principle[]>,
         ]);
-        if (dailyRes.ok) setDaily(await dailyRes.json());
-        if (principlesRes.ok) {
-          const data = await principlesRes.json();
-          setAllPrinciples(data);
-        }
+        if (dailyRes) setDaily(dailyRes);
+        if (principlesRes) setAllPrinciples(principlesRes);
       } catch {
         // Fallback to local data
         setDaily(PRINCIPLES[new Date().getDate() % PRINCIPLES.length]);

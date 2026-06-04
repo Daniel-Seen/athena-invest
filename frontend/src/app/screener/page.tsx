@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Star, TrendingUp, Shield, DollarSign, Loader2 } from "lucide-react";
+import { apiGet } from "@/lib/api";
 
 interface StockScore {
   symbol: string;
@@ -36,11 +37,9 @@ export default function ScreenerPage() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(
-          `http://localhost:8000/api/screener/quality?market=${market}&limit=20`
+        const data = await apiGet(
+          `/api/screener/quality?market=${market}&limit=20`
         );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           setStocks(data);
         } else {

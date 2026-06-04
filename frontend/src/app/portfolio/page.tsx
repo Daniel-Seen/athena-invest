@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
+import { apiGet, apiPost } from "@/lib/api";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -53,8 +54,8 @@ export default function PortfolioPage() {
 
   const fetchValuation = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:8000/api/portfolio/valuation");
-      if (res.ok) setValuation(await res.json());
+      const data = await apiGet("/api/portfolio/valuation") as Valuation;
+      setValuation(data);
     } catch (e) {
       // backend not ready
     }
@@ -68,12 +69,7 @@ export default function PortfolioPage() {
   const doTrade = async (type: "buy" | "sell", symbol: string, name: string, shares: number, price: number, notes: string) => {
     setTradeMsg("");
     try {
-      const res = await fetch(`http://localhost:8000/api/portfolio/${type}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, name, market: "us", shares, price, notes }),
-      });
-      const data = await res.json();
+      const data: any = await apiPost(`/api/portfolio/${type}`, { symbol, name, market: "us", shares, price, notes });
       if (data.error) {
         setTradeMsg(`❌ ${data.error}`);
       } else {
